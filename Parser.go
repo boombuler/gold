@@ -19,7 +19,7 @@ type parser struct {
 }
 
 // Creates a new parser by reading the grammar file from the passed Reader or an error
-func NewParser(grammar io.Reader) Parser, error {
+func NewParser(grammar io.Reader) (Parser, error) {
 	gr := loadCGTGramar(grammar)
 	if gr == nil {
 		return nil, cgtFormatError
