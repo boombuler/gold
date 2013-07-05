@@ -1,7 +1,9 @@
 package gold
 
 import (
+	"bufio"
 	"io"
+	"unicode/utf16"
 )
 
 type cgtGramar struct {
@@ -103,8 +105,37 @@ const (
 	recordIdComment     cgtRecordId = 33 //!
 )
 
-func readRecordEntry(r io.Reader) (*cgtRecEntry, error) {
-	eTypS, err := readByte(r)
+func readUInt16(r *bufio.Reader) (uint16, error) {
+	b1, err1 := r.ReadByte()
+	b2, err2 := r.ReadByte()
+
+	if err1 != nil {
+		return 0, err1
+	} else if err2 != nil {
+		return 0, err2
+	}
+
+	return uint16(b2)<<8 | uint16(b1), nil
+}
+
+func readString(r *bufio.Reader) (string, error) {
+	result := make([]uint16, 0)
+	for {
+		v, err := readUInt16(r)
+		if err != nil {
+			return "", err
+		}
+		if v == 0 {
+			break
+		}
+		result = append(result, v)
+	}
+
+	return string(utf16.Decode(result)), nil
+}
+
+func readRecordEntry(r *bufio.Reader) (*cgtRecEntry, error) {
+	eTypS, err := r.ReadByte()
 	if err != nil {
 		return nil, err
 	}
@@ -113,10 +144,10 @@ func readRecordEntry(r io.Reader) (*cgtRecEntry, error) {
 	case "E":
 		return &cgtRecEntry{typ: etEmpty, value: nil}, nil
 	case "B":
-		val, err := readByte(r)
+		val, err := r.ReadByte()
 		return &cgtRecEntry{typ: etBool, value: val == 1}, err
 	case "b":
-		val, err := readByte(r)
+		val, err := r.ReadByte()
 		return &cgtRecEntry{typ: etByte, value: val}, err
 	case "I":
 		val, err := readUInt16(r)
@@ -129,8 +160,8 @@ func readRecordEntry(r io.Reader) (*cgtRecEntry, error) {
 	return nil, cgtFormatError
 }
 
-func readRecord(r io.Reader) (cgtRecord, error) {
-	typ, err := readByte(r)
+func readRecord(r *bufio.Reader) (cgtRecord, error) {
+	typ, err := r.ReadByte()
 	if err != nil {
 		return nil, err
 	}
@@ -163,13 +194,15 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 		recover()
 	}()
 
-	if head, err := readString(r); head != cgtHeader || err != nil {
+	rd := bufio.NewReader(r)
+
+	if head, err := readString(rd); head != cgtHeader || err != nil {
 		return nil
 	}
 	result := new(cgtGramar)
 
 	for {
-		curRec, _ := readRecord(r)
+		curRec, _ := readRecord(rd)
 		if curRec == nil {
 			break
 		}
@@ -242,6 +275,7 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 				dfaedges[i].CharSet = result.charSets[edges[3*i+0].asInt()]
 				dfaedges[i].Target = result.dfaStates[edges[3*i+1].asInt()]
 			}
+
 			state.TransitionVector = newTransitionVector(dfaedges)
 		case recordIdLRTables:
 			idx := curRec[1].asInt()
@@ -251,8 +285,8 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 
 			lrstate := result.lrStates[idx]
 			lrstate.Index = idx
-			lrstate.Actions = newLRActionTable(result.symbols)
 
+			lrstate.Actions = make(lrActionTable)
 			for i := 0; i < actnCount; i++ {
 				symb := result.symbols[actions[4*i+0].asInt()]
 
@@ -274,6 +308,5 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 			}
 		}
 	}
-
 	return result
 }

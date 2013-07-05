@@ -1,7 +1,5 @@
 package gold
 
-import "strings"
-
 type dfaEdge struct {
 	CharSet charSet
 	Target  *dfaState
@@ -18,15 +16,8 @@ func newTransitionVector(edges []dfaEdge) transitionVector {
 	result := make(transitionVector)
 
 	for _, edge := range edges {
-		chars := strings.NewReader(string(edge.CharSet))
-
-		for {
-			r, _, err := chars.ReadRune()
-			if err == nil {
-				result[r] = edge.Target
-			} else {
-				break
-			}
+		for _, r := range edge.CharSet {
+			result[r] = edge.Target
 		}
 	}
 	return result

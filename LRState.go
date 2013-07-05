@@ -24,15 +24,6 @@ type lrAction struct {
 
 type lrActionTable map[*symbol]*lrAction
 
-func newLRActionTable(symbols symbolTable) lrActionTable {
-	result := make(lrActionTable)
-	for _, symbol := range symbols {
-		result[symbol] = nil
-	}
-
-	return result
-}
-
 type action byte
 
 const (
