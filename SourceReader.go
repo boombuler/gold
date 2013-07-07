@@ -6,11 +6,16 @@ import (
 	"io"
 )
 
+// represents a position in the input text
 type TextPosition struct {
-	Line   int
+
+	// The Line, starts with line 1
+	Line int
+	// The Column, starts with column 1
 	Column int
 }
 
+// returns a string representing the textposition
 func (t TextPosition) String() string {
 	return fmt.Sprintf("Line %d, Column %d", t.Line, t.Column)
 }

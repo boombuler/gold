@@ -1,3 +1,4 @@
+// Package that implements an engine for the gold parser system
 package gold
 
 import (
@@ -9,6 +10,7 @@ import "fmt"
 
 // Implements parsing logic
 type Parser interface {
+
 	// reads the code from the reader and returns the syntax-tree or a parsing error
 	// if trimReduction is set to true, tokens which have only one non-terminal sub-node are reduced.
 	Parse(r io.Reader, trimReduce bool) (*Token, error)
@@ -18,7 +20,8 @@ type parser struct {
 	grammar *cgtGramar
 }
 
-// Creates a new parser by reading the grammar file from the passed Reader or an error
+// Creates a new parser by reading the grammar file from the passed Reader or an error.
+// Currently only supports the cgt grammar files
 func NewParser(grammar io.Reader) (Parser, error) {
 	gr := loadCGTGramar(grammar)
 	if gr == nil {
