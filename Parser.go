@@ -20,12 +20,18 @@ type parser struct {
 	grammar *cgtGramar
 }
 
+type grammarError string
+
+func (ge grammarError) Error() string {
+	return string(ge)
+}
+
 // Creates a new parser by reading the grammar file from the passed Reader or an error.
 // Currently only supports the cgt grammar files
 func NewParser(grammar io.Reader) (Parser, error) {
 	gr := loadCGTGramar(grammar)
 	if gr == nil {
-		return nil, cgtFormatError
+		return nil, grammarError("Invalid CGT file")
 	}
 	parser := new(parser)
 	parser.grammar = gr
@@ -199,7 +205,14 @@ func (p *parser) Parse(r io.Reader, trimReduce bool) (*Token, error) {
 						tokens[tokenCnt-1-idx] = tokenStack.Pop().(*Token)
 					}
 
-					nttoken := &Token{Name: rule.NonTerminal.String(), Text: rule.String(), Tokens: tokens, IsTerminal: false}
+					nttoken := &Token{
+						Name:       rule.NonTerminal.String(),
+						Text:       rule.String(),
+						Tokens:     tokens,
+						IsTerminal: false,
+						Symbol:     SymbolId(rule.NonTerminal.Index),
+						Rule:       RuleId(rule.Index),
+					}
 					tokenStack.Push(nttoken)
 
 					currentState = stateStack.Peek().(*lrState)

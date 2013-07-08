@@ -11,9 +11,16 @@ type parserToken struct {
 	Position TextPosition
 }
 
+type SymbolId int
+
+const InvalidSymbol SymbolId = -1
+
+type RuleId int
+
+const InvalidRule RuleId = -1
+
 // Represents a node of a parsed syntax-tree
 type Token struct {
-
 	// contains the name of the token
 	Name string
 
@@ -26,8 +33,19 @@ type Token struct {
 
 	// tells if the token is a terminal or a non-terminal
 	IsTerminal bool
+
+	Symbol SymbolId
+
+	Rule RuleId
 }
 
 func (pt *parserToken) toToken() *Token {
-	return &Token{Name: pt.Symbol.String(), Text: pt.Text, Tokens: nil, IsTerminal: pt.Symbol.Kind == stTerminal}
+	return &Token{
+		Name:       pt.Symbol.String(),
+		Text:       pt.Text,
+		Tokens:     nil,
+		IsTerminal: pt.Symbol.Kind == stTerminal,
+		Symbol:     SymbolId(pt.Symbol.Index),
+		Rule:       InvalidRule,
+	}
 }
