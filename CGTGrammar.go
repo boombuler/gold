@@ -2,21 +2,33 @@ package gold
 
 import (
 	"bufio"
-	"io"
 )
 
-type cgtGramar struct {
-	Name            string
-	Version         string
-	Author          string
-	About           string
+const (
+	cgtHeader = "GOLD Parser Tables/v1.0"
+)
+
+type cgtRecordId byte
+
+const (
+	cgtRIdParameters  cgtRecordId = 80 // P
+	cgtRIdTableCounts cgtRecordId = 84 // T
+	cgtRIdInitial     cgtRecordId = 73 // I
+	cgtRIdSymbols     cgtRecordId = 83 // S
+	cgtRIdCharSets    cgtRecordId = 67 // C
+	cgtRIdRules       cgtRecordId = 82 // R
+	cgtRIdDFAStates   cgtRecordId = 68 // D
+	cgtRIdLRTables    cgtRecordId = 76 // L
+)
+
+type cgtGrammar struct {
+	Infos           GrammarInformation
 	CaseSensitive   bool
-	startSymbol     int
-	initialDFAState int
-	initialLRState  int
+	initialDFAState uint16
+	initialLRState  uint16
 
 	symbols   symbolTable
-	charSets  charSetTable
+	charSets  simpleCharSetTable
 	rules     ruleTable
 	dfaStates dfaStateTable
 	lrStates  lrStateTable
@@ -25,31 +37,22 @@ type cgtGramar struct {
 	endSymbol   *symbol
 }
 
-func (g cgtGramar) getInitialDfaState() *dfaState {
+func (g cgtGrammar) getInformation() GrammarInformation {
+	return g.Infos
+}
+
+func (g cgtGrammar) getInitialDfaState() *dfaState {
 	return g.dfaStates[g.initialDFAState]
 }
 
-func (g cgtGramar) getInitialLRState() *lrState {
+func (g cgtGrammar) getInitialLRState() *lrState {
 	return g.lrStates[g.initialLRState]
 }
 
-const (
-	cgtHeader = "GOLD Parser Tables/v1.0"
-)
-
 type cgtRecEntryTyp byte
 
-func loadCGTGramar(r io.Reader) *cgtGramar {
-	defer func() {
-		recover()
-	}()
-
-	rd := bufio.NewReader(r)
-
-	if head, err := readString(rd); head != cgtHeader || err != nil {
-		return nil
-	}
-	result := new(cgtGramar)
+func loadCGTGrammar(rd *bufio.Reader) *cgtGrammar {
+	result := new(cgtGrammar)
 
 	records := readRecords(rd)
 
@@ -58,22 +61,22 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 		recTyp := cgtRecordId((<-curRec).asByte())
 
 		switch recTyp {
-		case recordIdParameters:
-			result.Name = (<-curRec).asString()
-			result.Version = (<-curRec).asString()
-			result.Author = (<-curRec).asString()
-			result.About = (<-curRec).asString()
+		case cgtRIdParameters:
+			result.Infos.Name = (<-curRec).asString()
+			result.Infos.Version = (<-curRec).asString()
+			result.Infos.Author = (<-curRec).asString()
+			result.Infos.About = (<-curRec).asString()
 			result.CaseSensitive = (<-curRec).asBool()
-			result.startSymbol = (<-curRec).asInt()
+			(<-curRec).asInt()
 
-		case recordIdTableCounts:
+		case cgtRIdTableCounts:
 			result.symbols = newSymbolTable((<-curRec).asInt(), true)
-			result.charSets = newCharSetTable((<-curRec).asInt())
+			result.charSets = newSimpleCharSetTable((<-curRec).asInt())
 			result.rules = newRuleTable((<-curRec).asInt())
 			result.dfaStates = newDFAStateTable((<-curRec).asInt())
 			result.lrStates = newLRStateTable((<-curRec).asInt())
 
-		case recordIdSymbols:
+		case cgtRIdSymbols:
 			idx := (<-curRec).asInt()
 			result.symbols[idx].Index = idx
 			result.symbols[idx].Name = (<-curRec).asString()
@@ -86,29 +89,29 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 				result.errorSymbol = result.symbols[idx]
 			}
 
-		case recordIdCharSets:
+		case cgtRIdCharSets:
 			idx := (<-curRec).asInt()
-			result.charSets[idx] = charSet((<-curRec).asString())
+			result.charSets[idx] = simpleCharSet((<-curRec).asString())
 
-		case recordIdRules:
+		case cgtRIdRules:
 			r := result.rules[(<-curRec).asInt()]
 			r.NonTerminal = result.symbols[(<-curRec).asInt()]
 			<-curRec // Field No 3 is reserved...
 
 			symbols := curRec.readTillEnd()
 
-			r.Symbols = newSymbolTable(len(symbols), false)
+			r.Symbols = newSymbolTable(uint16(len(symbols)), false)
 
 			for idx, entry := range symbols {
 				r.Symbols[idx] = result.symbols[entry.asInt()]
 			}
 			result.rules[r.Index] = r
 
-		case recordIdInitial:
+		case cgtRIdInitial:
 			result.initialDFAState = (<-curRec).asInt()
 			result.initialLRState = (<-curRec).asInt()
 
-		case recordIdDFAStates:
+		case cgtRIdDFAStates:
 			idx := (<-curRec).asInt()
 			state := result.dfaStates[idx]
 
@@ -122,15 +125,15 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 
 			edges := curRec.readTillEnd()
 			edgeCount := len(edges) / 3
-			dfaedges := make([]dfaEdge, edgeCount)
+			dfaedges := make([]simpleDfaEdge, edgeCount)
 
 			for i := 0; i < len(edges)/3; i++ {
 				dfaedges[i].CharSet = result.charSets[edges[3*i+0].asInt()]
 				dfaedges[i].Target = result.dfaStates[edges[3*i+1].asInt()]
 			}
 
-			state.TransitionVector = newTransitionVector(dfaedges)
-		case recordIdLRTables:
+			state.TransitionVector = newSimpleTransitionVector(dfaedges)
+		case cgtRIdLRTables:
 			idx := (<-curRec).asInt()
 			(<-curRec) // reserved...
 
@@ -160,6 +163,8 @@ func loadCGTGramar(r io.Reader) *cgtGramar {
 				}
 
 			}
+		default:
+			curRec.readTillEnd()
 		}
 	}
 	return result

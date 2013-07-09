@@ -11,13 +11,9 @@ type parserToken struct {
 	Position TextPosition
 }
 
-type SymbolId int
+type SymbolId uint16
 
-const InvalidSymbol SymbolId = -1
-
-type RuleId int
-
-const InvalidRule RuleId = -1
+type RuleId uint16
 
 // Represents a node of a parsed syntax-tree
 type Token struct {
@@ -46,6 +42,5 @@ func (pt *parserToken) toToken() *Token {
 		Tokens:     nil,
 		IsTerminal: pt.Symbol.Kind == stTerminal,
 		Symbol:     SymbolId(pt.Symbol.Index),
-		Rule:       InvalidRule,
 	}
 }

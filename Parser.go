@@ -3,10 +3,9 @@ package gold
 
 import (
 	"bufio"
-	"bytes"
+	"fmt"
 	"io"
 )
-import "fmt"
 
 // Implements parsing logic
 type Parser interface {
@@ -14,10 +13,32 @@ type Parser interface {
 	// reads the code from the reader and returns the syntax-tree or a parsing error
 	// if trimReduction is set to true, tokens which have only one non-terminal sub-node are reduced.
 	Parse(r io.Reader, trimReduce bool) (*Token, error)
+
+	GetInformation() GrammarInformation
+
+	Test(r io.Reader)
+}
+
+type GrammarInformation struct {
+	Name    string
+	Version string
+	Author  string
+	About   string
 }
 
 type parser struct {
-	grammar *cgtGramar
+	grammar      grammar
+	isCgtGrammar bool
+}
+
+type grammar interface {
+	getInformation() GrammarInformation
+	readTokens(rd io.Reader) <-chan *parserToken
+	getInitialLRState() *lrState
+}
+
+func (p parser) GetInformation() GrammarInformation {
+	return p.grammar.getInformation()
 }
 
 type grammarError string
@@ -29,133 +50,39 @@ func (ge grammarError) Error() string {
 // Creates a new parser by reading the grammar file from the passed Reader or an error.
 // Currently only supports the cgt grammar files
 func NewParser(grammar io.Reader) (Parser, error) {
-	gr := loadCGTGramar(grammar)
-	if gr == nil {
-		return nil, grammarError("Invalid CGT file")
-	}
-	parser := new(parser)
-	parser.grammar = gr
+	rd := bufio.NewReader(grammar)
 
+	head, err := readString(rd)
+	if err != nil {
+		return nil, grammarError("Invalid grammar file format")
+	}
+
+	parser := new(parser)
+
+	switch head {
+	case cgtHeader:
+		parser.grammar = loadCGTGrammar(rd)
+		parser.isCgtGrammar = true
+	case egtHeader:
+		parser.grammar = loadEGTGrammar(rd)
+		parser.isCgtGrammar = false
+	default:
+		return nil, grammarError("Unknown grammar file format: " + head)
+	}
+	if parser.grammar == nil {
+		return nil, grammarError("Unable to read grammar file")
+	}
 	return parser, nil
 }
 
-func (p *parser) readTokens(rd io.Reader) <-chan *parserToken {
-	c := make(chan *parserToken)
-	r := newSourceReader(rd)
-	go func() {
-		for {
-			t := p.readToken(r, true)
-			c <- t
-			if t.Symbol.Kind == stEnd || t.Symbol.Kind == stError {
-				close(c)
-				return
-			}
-		}
-	}()
-	return c
-}
-
-func (p *parser) readToken(r *sourceReader, readComments bool) *parserToken {
-
-	dfa := p.grammar.getInitialDfaState()
-
-	tText := new(bytes.Buffer)
-	tWriter := bufio.NewWriter(tText)
-
-	result := new(parserToken)
-	result.Text = ""
-	result.Symbol = p.grammar.errorSymbol
-	result.Position = r.Position
-
-	for {
-		if !r.Next() {
-			tWriter.Flush()
-			if r.Rune == 0 && tText.Len() == 0 {
-				result.Text = ""
-				result.Symbol = p.grammar.endSymbol
-			}
-			return result
-		}
-
-		nextState, ok := dfa.TransitionVector[r.Rune]
-		if ok {
-			tWriter.WriteRune(r.Rune)
-
-			dfa = nextState
-			if dfa.AcceptSymbol != nil {
-				tWriter.Flush()
-				result.Text = string(tText.Bytes())
-				result.Symbol = dfa.AcceptSymbol
-			}
-		} else {
-			if result.Symbol == p.grammar.errorSymbol {
-				tWriter.WriteRune(r.Rune)
-			}
-
-			r.SkipNextRead = true
-			break
-		}
+func (p *parser) Test(r io.Reader) {
+	for input := range p.grammar.readTokens(r) {
+		fmt.Println(input)
 	}
-
-	tWriter.Flush()
-	result.Text = string(tText.Bytes())
-
-	if readComments {
-		switch result.Symbol.Kind {
-		case stCommentLine:
-			result.Text += p.readLineComment(r)
-		case stCommentStart:
-			result.Text += p.readBlockComment(r)
-		}
-	}
-
-	return result
-}
-
-func (p *parser) readBlockComment(r *sourceReader) string {
-	buff := new(bytes.Buffer)
-
-	for {
-		token := p.readToken(r, false)
-
-		symbolType := token.Symbol.Kind
-
-		switch symbolType {
-
-		case stEnd, stCommentEnd:
-			buff.WriteString(token.Text)
-			return string(buff.Bytes())
-		case stError:
-			buff.WriteString(token.Text)
-			r.Next()
-		default:
-			buff.WriteString(token.Text)
-		}
-	}
-
-	return string(buff.Bytes())
-}
-
-func (p *parser) readLineComment(r *sourceReader) string {
-	result := new(bytes.Buffer)
-	exit := false
-	for r.Next() {
-		sRune := string(r.Rune)
-		if sRune == "\n" || sRune == "\r" {
-			exit = true
-		} else {
-			if exit {
-				r.SkipNextRead = true
-				break
-			}
-			result.WriteRune(r.Rune)
-		}
-	}
-	return string(result.Bytes())
 }
 
 func (p *parser) Parse(r io.Reader, trimReduce bool) (*Token, error) {
-	input := p.readTokens(r)
+	input := p.grammar.readTokens(r)
 
 	tokenStack := new(stack)
 	stateStack := new(stack)
@@ -166,9 +93,9 @@ func (p *parser) Parse(r io.Reader, trimReduce bool) (*Token, error) {
 	for nextToken := range input {
 		lastToken = nextToken
 		switch nextToken.Symbol.Kind {
-		case stCommentStart, stCommentLine:
+		case stGroupStart, stCommentLine:
 			continue
-		case stWhitespace:
+		case stNoise:
 			continue
 		case stError:
 			return nil, &ParseError{Message: fmt.Sprintf("Unknown Token \"%s\"", nextToken.Text), Position: nextToken.Position}

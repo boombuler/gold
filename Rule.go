@@ -3,16 +3,17 @@ package gold
 import "bytes"
 
 type rule struct {
-	Index       int
+	Index       uint16
 	NonTerminal *symbol
 	Symbols     symbolTable
 }
 
 type ruleTable []*rule
 
-func newRuleTable(count int) ruleTable {
+func newRuleTable(count uint16) ruleTable {
 	result := make(ruleTable, count)
-	for i := 0; i < count; i++ {
+	var i uint16
+	for i = 0; i < count; i++ {
 		result[i] = new(rule)
 		result[i].Index = i
 	}

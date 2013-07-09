@@ -24,9 +24,9 @@ func (re cgtRecEntry) asByte() byte {
 	return 0
 }
 
-func (re cgtRecEntry) asInt() int {
+func (re cgtRecEntry) asInt() uint16 {
 	if re.typ == etInt16 {
-		return int(re.value.(int16))
+		return uint16(re.value.(uint16))
 	}
 	return 0
 }
@@ -44,20 +44,6 @@ const (
 	etByte
 	etInt16
 	etString
-)
-
-type cgtRecordId byte
-
-const (
-	recordIdParameters  cgtRecordId = 80 //P
-	recordIdTableCounts cgtRecordId = 84 //T
-	recordIdInitial     cgtRecordId = 73 //I
-	recordIdSymbols     cgtRecordId = 83 //S
-	recordIdCharSets    cgtRecordId = 67 //C
-	recordIdRules       cgtRecordId = 82 //R
-	recordIdDFAStates   cgtRecordId = 68 //D
-	recordIdLRTables    cgtRecordId = 76 //L
-	recordIdComment     cgtRecordId = 33 //!
 )
 
 func readUInt16(r *bufio.Reader) (uint16, error) {
@@ -106,7 +92,7 @@ func readRecordEntry(r *bufio.Reader) (*cgtRecEntry, error) {
 		return &cgtRecEntry{typ: etByte, value: val}, err
 	case "I":
 		val, err := readUInt16(r)
-		return &cgtRecEntry{typ: etInt16, value: int16(val)}, err
+		return &cgtRecEntry{typ: etInt16, value: val}, err
 	case "S":
 		val, err := readString(r)
 		return &cgtRecEntry{typ: etString, value: val}, err

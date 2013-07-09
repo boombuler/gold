@@ -1,15 +1,16 @@
 package gold
 
 type lrState struct {
-	Index   int
+	Index   uint16
 	Actions lrActionTable
 }
 
 type lrStateTable []*lrState
 
-func newLRStateTable(count int) lrStateTable {
+func newLRStateTable(count uint16) lrStateTable {
 	result := make(lrStateTable, count)
-	for i := 0; i < count; i++ {
+	var i uint16
+	for i = 0; i < count; i++ {
 		result[i] = new(lrState)
 	}
 	return result

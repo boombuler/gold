@@ -1,33 +1,54 @@
 package gold
 
-type dfaEdge struct {
-	CharSet charSet
+type simpleDfaEdge struct {
+	CharSet simpleCharSet
 	Target  *dfaState
 }
 
-type dfaState struct {
-	AcceptSymbol     *symbol
-	TransitionVector transitionVector
+type dfaEdge struct {
+	CharSet *charSet
+	Target  *dfaState
 }
 
-type transitionVector map[rune]*dfaState
+type dfaTransition func(r rune) (*dfaState, bool)
 
-func newTransitionVector(edges []dfaEdge) transitionVector {
-	result := make(transitionVector)
+type dfaState struct {
+	AcceptSymbol     *symbol
+	TransitionVector dfaTransition
+}
+
+func newSimpleTransitionVector(edges []simpleDfaEdge) dfaTransition {
+	vector := make(map[rune]*dfaState)
 
 	for _, edge := range edges {
 		for _, r := range edge.CharSet {
-			result[r] = edge.Target
+			vector[r] = edge.Target
 		}
 	}
-	return result
+
+	return func(r rune) (*dfaState, bool) {
+		state, ok := vector[r]
+		return state, ok
+	}
+}
+
+func newTransitionVector(edges []dfaEdge) dfaTransition {
+	return func(r rune) (*dfaState, bool) {
+		for _, edge := range edges {
+			if edge.CharSet.contains(r) {
+				return edge.Target, true
+			}
+		}
+		return nil, false
+	}
 }
 
 type dfaStateTable []*dfaState
 
-func newDFAStateTable(count int) dfaStateTable {
+func newDFAStateTable(count uint16) dfaStateTable {
 	result := make(dfaStateTable, count)
-	for i := 0; i < count; i++ {
+	var i uint16
+	for i = 0; i < count; i++ {
 		result[i] = new(dfaState)
 	}
 	return result
