@@ -22,7 +22,7 @@ func (t TextPosition) String() string {
 
 type sourceReader struct {
 	bufReader    *bufio.Reader
-	unreadBuffer []rune
+	unreadBuffer *stack
 	Rune         rune
 	Position     TextPosition
 }
@@ -31,14 +31,13 @@ func newSourceReader(r io.Reader) *sourceReader {
 	result := &sourceReader{bufReader: bufio.NewReader(r)}
 	result.Position.Line = 1
 	result.Position.Column = 0
-	result.unreadBuffer = make([]rune, 0)
+	result.unreadBuffer = newStack()
 	return result
 }
 
 func (r *sourceReader) Next() bool {
-	if len(r.unreadBuffer) > 0 {
-		r.Rune = r.unreadBuffer[0]
-		r.unreadBuffer = r.unreadBuffer[1:]
+	if r.unreadBuffer.count > 0 {
+		r.Rune = r.unreadBuffer.Pop().(rune)
 		return true
 	}
 
@@ -57,17 +56,12 @@ func (r *sourceReader) Next() bool {
 	return true
 }
 
-func (sr *sourceReader) UnreadAll(r []rune) {
-	result := make([]rune, len(r)+len(sr.unreadBuffer))
-	copy(result, r)
-	copy(result[len(r):], sr.unreadBuffer)
-
-	sr.unreadBuffer = result
+func (sr *sourceReader) UnreadAll(runes []rune) {
+	for i := len(runes) - 1; i >= 0; i-- {
+		sr.unreadBuffer.Push(runes[i])
+	}
 }
 
 func (sr *sourceReader) UnreadLast() {
-	result := make([]rune, len(sr.unreadBuffer)+1)
-	result[0] = sr.Rune
-	copy(result[1:], sr.unreadBuffer)
-	sr.unreadBuffer = result
+	sr.unreadBuffer.Push(sr.Rune)
 }

@@ -81,19 +81,19 @@ func readRecordEntry(r *bufio.Reader) (*cgtRecEntry, error) {
 		return nil, err
 	}
 
-	switch string(eTypS) {
-	case "E":
+	switch eTypS {
+	case 69: // E
 		return &cgtRecEntry{typ: etEmpty, value: nil}, nil
-	case "B":
+	case 66: // B
 		val, err := r.ReadByte()
 		return &cgtRecEntry{typ: etBool, value: val == 1}, err
-	case "b":
+	case 98: // b
 		val, err := r.ReadByte()
 		return &cgtRecEntry{typ: etByte, value: val}, err
-	case "I":
+	case 73: // I
 		val, err := readUInt16(r)
 		return &cgtRecEntry{typ: etInt16, value: val}, err
-	case "S":
+	case 83: // S
 		val, err := readString(r)
 		return &cgtRecEntry{typ: etString, value: val}, err
 	}

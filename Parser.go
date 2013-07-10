@@ -78,8 +78,8 @@ func NewParser(grammar io.Reader) (Parser, error) {
 func (p *parser) Parse(r io.Reader, trimReduce bool) (*Token, error) {
 	input := p.grammar.readTokens(r)
 
-	tokenStack := new(stack)
-	stateStack := new(stack)
+	tokenStack := newStack()
+	stateStack := newStack()
 
 	stateStack.Push(p.grammar.getInitialLRState())
 	var lastToken *parserToken = nil

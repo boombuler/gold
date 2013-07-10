@@ -1,7 +1,6 @@
 package gold
 
 import (
-	"bufio"
 	"bytes"
 	"io"
 )
@@ -11,7 +10,7 @@ func (g *egtGrammar) readTokens(rd io.Reader) <-chan *parserToken {
 
 	sr := newSourceReader(rd)
 
-	groupStack := new(stack)
+	groupStack := newStack()
 
 	go func() {
 
@@ -86,7 +85,6 @@ func (g *egtGrammar) readToken(r *sourceReader) *parserToken {
 	dfa := g.getInitialDfaState()
 
 	tText := new(bytes.Buffer)
-	tWriter := bufio.NewWriter(tText)
 
 	result := new(parserToken)
 	result.Text = ""
@@ -94,7 +92,6 @@ func (g *egtGrammar) readToken(r *sourceReader) *parserToken {
 	result.Position = r.Position
 	for {
 		if !r.Next() {
-			tWriter.Flush()
 			if r.Rune == 0 && tText.Len() == 0 {
 				result.Text = ""
 				result.Symbol = g.endSymbol
@@ -104,24 +101,22 @@ func (g *egtGrammar) readToken(r *sourceReader) *parserToken {
 
 		nextState, ok := dfa.TransitionVector(r.Rune)
 		if ok {
-			tWriter.WriteRune(r.Rune)
+			tText.WriteRune(r.Rune)
 
 			dfa = nextState
 			if dfa.AcceptSymbol != nil {
-				tWriter.Flush()
 				result.Text = string(tText.Bytes())
 				result.Symbol = dfa.AcceptSymbol
 			}
 		} else {
 			if result.Symbol == g.errorSymbol {
-				tWriter.WriteRune(r.Rune)
+				tText.WriteRune(r.Rune)
 			} else {
 				r.UnreadLast()
 			}
 			break
 		}
 	}
-	tWriter.Flush()
 	result.Text = string(tText.Bytes())
 
 	return result
