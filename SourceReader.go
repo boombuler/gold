@@ -22,7 +22,7 @@ func (t TextPosition) String() string {
 
 type sourceReader struct {
 	bufReader    *bufio.Reader
-	SkipNextRead bool
+	unreadBuffer []rune
 	Rune         rune
 	Position     TextPosition
 }
@@ -31,15 +31,17 @@ func newSourceReader(r io.Reader) *sourceReader {
 	result := &sourceReader{bufReader: bufio.NewReader(r)}
 	result.Position.Line = 1
 	result.Position.Column = 0
-	result.SkipNextRead = false
+	result.unreadBuffer = make([]rune, 0)
 	return result
 }
 
 func (r *sourceReader) Next() bool {
-	if r.SkipNextRead {
-		r.SkipNextRead = false
+	if len(r.unreadBuffer) > 0 {
+		r.Rune = r.unreadBuffer[0]
+		r.unreadBuffer = r.unreadBuffer[1:]
 		return true
 	}
+
 	cur, _, err := r.bufReader.ReadRune()
 	r.Rune = cur
 	if err != nil {
@@ -53,4 +55,19 @@ func (r *sourceReader) Next() bool {
 	}
 
 	return true
+}
+
+func (sr *sourceReader) UnreadAll(r []rune) {
+	result := make([]rune, len(r)+len(sr.unreadBuffer))
+	copy(result, r)
+	copy(result[len(r):], sr.unreadBuffer)
+
+	sr.unreadBuffer = result
+}
+
+func (sr *sourceReader) UnreadLast() {
+	result := make([]rune, len(sr.unreadBuffer)+1)
+	result[0] = sr.Rune
+	copy(result[1:], sr.unreadBuffer)
+	sr.unreadBuffer = result
 }

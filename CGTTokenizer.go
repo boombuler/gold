@@ -65,8 +65,7 @@ func (g *cgtGrammar) readToken(r *sourceReader, readComments bool) *parserToken 
 			if result.Symbol == g.errorSymbol {
 				tWriter.WriteRune(r.Rune)
 			}
-
-			r.SkipNextRead = true
+			r.UnreadLast()
 			break
 		}
 	}
@@ -118,7 +117,7 @@ func (g *cgtGrammar) readLineComment(r *sourceReader) string {
 			exit = true
 		} else {
 			if exit {
-				r.SkipNextRead = true
+				r.UnreadLast()
 				break
 			}
 			result.WriteRune(r.Rune)

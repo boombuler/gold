@@ -104,18 +104,26 @@ func readRecordEntry(r *bufio.Reader) (*cgtRecEntry, error) {
 type recordEntry (<-chan *cgtRecEntry)
 
 func (re recordEntry) readTillEnd() []*cgtRecEntry {
-	result := make([]*cgtRecEntry, 0)
+	result := make([]*cgtRecEntry, 256)
+	idx := 0
 	for x := range re {
-		result = append(result, x)
+		if idx >= cap(result) { // if necessary, reallocate
+			// allocate double what's needed, for future growth.
+			newSlice := make([]*cgtRecEntry, (idx+1)*2)
+			copy(newSlice, result)
+			result = newSlice
+		}
+		result[idx] = x
+		idx++
 	}
+	result = result[0:idx]
 	return result
 }
 
 func readRecords(r *bufio.Reader) <-chan recordEntry {
-	result := make(chan recordEntry)
+	result := make(chan recordEntry, 10)
 
 	go func() {
-
 		for {
 			typ, err := r.ReadByte()
 			if err != nil {
@@ -124,36 +132,31 @@ func readRecords(r *bufio.Reader) <-chan recordEntry {
 			}
 
 			if string(typ) == "M" {
-				record := make(chan *cgtRecEntry)
-				result <- record
-
 				entryCnt, err := readUInt16(r)
 				if err != nil {
-					close(record)
 					close(result)
 					return
-				} else if entryCnt < 1 {
-					close(record)
-					return
 				}
-
-				var i uint16
-				for i = 0; i < entryCnt; i++ {
-					entr, err := readRecordEntry(r)
-					if err != nil {
-						close(record)
-						close(result)
-						return
+				if entryCnt > 0 {
+					record := make(chan *cgtRecEntry, entryCnt)
+					result <- record
+					var i uint16
+					for i = 0; i < entryCnt; i++ {
+						entr, err := readRecordEntry(r)
+						if err != nil {
+							close(record)
+							close(result)
+							return
+						}
+						record <- entr
 					}
-					record <- entr
+					close(record)
 				}
-				close(record)
 			} else {
 				close(result)
 				return
 			}
 		}
-
 	}()
 
 	return result

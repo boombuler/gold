@@ -4,8 +4,6 @@ import (
 	"bufio"
 )
 
-import "fmt"
-
 const (
 	egtHeader = "GOLD Parser Tables/v5.0"
 )
@@ -54,11 +52,10 @@ func (g egtGrammar) getInitialLRState() *lrState {
 }
 
 func loadEGTGrammar(rd *bufio.Reader) *egtGrammar {
-	fmt.Println("Loading EGT file")
-
 	result := new(egtGrammar)
 
 	records := readRecords(rd)
+
 	for curRec := range records {
 		// process record...
 		recTyp := egtRecordId((<-curRec).asByte())
@@ -119,7 +116,6 @@ func loadEGTGrammar(rd *bufio.Reader) *egtGrammar {
 			r := result.rules[(<-curRec).asInt()]
 			r.NonTerminal = result.symbols[(<-curRec).asInt()]
 			<-curRec // Field No 3 is reserved...
-
 			symbols := curRec.readTillEnd()
 
 			r.Symbols = newSymbolTable(uint16(len(symbols)), false)
@@ -133,6 +129,7 @@ func loadEGTGrammar(rd *bufio.Reader) *egtGrammar {
 			result.initialLRState = (<-curRec).asInt()
 
 		case egtRIdDFAStates:
+
 			idx := (<-curRec).asInt()
 			state := result.dfaStates[idx]
 
@@ -154,7 +151,9 @@ func loadEGTGrammar(rd *bufio.Reader) *egtGrammar {
 			}
 
 			state.TransitionVector = newTransitionVector(dfaedges)
+
 		case egtRIdLRTables:
+
 			idx := (<-curRec).asInt()
 			(<-curRec) // reserved...
 
@@ -183,6 +182,7 @@ func loadEGTGrammar(rd *bufio.Reader) *egtGrammar {
 					actn.TargetRule = result.rules[targetIdx]
 				}
 			}
+
 		case egtRIdGroup:
 			group := result.groups[(<-curRec).asInt()]
 			group.Name = (<-curRec).asString()

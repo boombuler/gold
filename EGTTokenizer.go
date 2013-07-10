@@ -3,38 +3,26 @@ package gold
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 )
 
 func (g *egtGrammar) readTokens(rd io.Reader) <-chan *parserToken {
-	c := make(chan *parserToken)
-	r := newSourceReader(rd)
-	go func() {
-		for {
-			t := g.readToken(r, true)
-			c <- t
-			if t.Symbol.Kind == stEnd {
-				close(c)
-			}
-		}
-	}()
-	return g.processGroups(c)
-}
+	result := make(chan *parserToken, 100)
 
-func (g *egtGrammar) processGroups(input <-chan *parserToken) <-chan *parserToken {
-	result := make(chan *parserToken)
+	sr := newSourceReader(rd)
 
 	groupStack := new(stack)
 
 	go func() {
 
 		nestGroup := false
-
-		for read := range input {
-
-			fmt.Println("Processing ", read)
-
+		for {
+			read := g.readToken(sr)
+			if read.Symbol.Kind == stEnd {
+				// EOF always stops the loop. The caller method (parse) can flag a runaway group error.
+				result <- read
+				break
+			}
 			// Groups (comments, etc.)
 			// The logic - to determine if a group should be nested - requires that the top
 			// of the stack and the symbol's linked group need to be looked at. Both of these
@@ -64,19 +52,14 @@ func (g *egtGrammar) processGroups(input <-chan *parserToken) <-chan *parserToke
 				if pop.Symbol.Group.EndingMode == emClosed {
 					pop.Text = pop.Text + read.Text
 				}
-
 				if groupStack.Len() == 0 {
 					// We are out of the group. Return pop'd token which contains all the group text
 					pop.Symbol = pop.Symbol.Group.Container
-					result <- read
+					result <- pop
 				} else {
 					// Append group text to parent
 					groupStack.Peek().(*parserToken).Text += pop.Text
 				}
-			} else if read.Symbol.Kind == stEnd {
-				// EOF always stops the loop. The caller method (parse) can flag a runaway group error.
-				result <- read
-				break
 			} else {
 				// We are in a group, Append to the Token on the top of the stack.
 				// Take into account the Token group mode
@@ -86,8 +69,9 @@ func (g *egtGrammar) processGroups(input <-chan *parserToken) <-chan *parserToke
 					top.Text += read.Text
 				} else {
 					// Append one character
-					top.Text += string([]rune(read.Text)[0])
-					//! consumeBuffer(1);
+					runes := []rune(read.Text)
+					top.Text += string(runes[0])
+					sr.UnreadAll(runes[1:])
 				}
 			}
 		}
@@ -97,7 +81,7 @@ func (g *egtGrammar) processGroups(input <-chan *parserToken) <-chan *parserToke
 	return result
 }
 
-func (g *egtGrammar) readToken(r *sourceReader, readComments bool) *parserToken {
+func (g *egtGrammar) readToken(r *sourceReader) *parserToken {
 
 	dfa := g.getInitialDfaState()
 
@@ -108,7 +92,6 @@ func (g *egtGrammar) readToken(r *sourceReader, readComments bool) *parserToken 
 	result.Text = ""
 	result.Symbol = g.errorSymbol
 	result.Position = r.Position
-
 	for {
 		if !r.Next() {
 			tWriter.Flush()
@@ -132,13 +115,12 @@ func (g *egtGrammar) readToken(r *sourceReader, readComments bool) *parserToken 
 		} else {
 			if result.Symbol == g.errorSymbol {
 				tWriter.WriteRune(r.Rune)
+			} else {
+				r.UnreadLast()
 			}
-
-			r.SkipNextRead = true
 			break
 		}
 	}
-
 	tWriter.Flush()
 	result.Text = string(tText.Bytes())
 

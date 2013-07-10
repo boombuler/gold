@@ -15,8 +15,6 @@ type Parser interface {
 	Parse(r io.Reader, trimReduce bool) (*Token, error)
 
 	GetInformation() GrammarInformation
-
-	Test(r io.Reader)
 }
 
 type GrammarInformation struct {
@@ -50,6 +48,7 @@ func (ge grammarError) Error() string {
 // Creates a new parser by reading the grammar file from the passed Reader or an error.
 // Currently only supports the cgt grammar files
 func NewParser(grammar io.Reader) (Parser, error) {
+
 	rd := bufio.NewReader(grammar)
 
 	head, err := readString(rd)
@@ -72,13 +71,8 @@ func NewParser(grammar io.Reader) (Parser, error) {
 	if parser.grammar == nil {
 		return nil, grammarError("Unable to read grammar file")
 	}
-	return parser, nil
-}
 
-func (p *parser) Test(r io.Reader) {
-	for input := range p.grammar.readTokens(r) {
-		fmt.Println(input)
-	}
+	return parser, nil
 }
 
 func (p *parser) Parse(r io.Reader, trimReduce bool) (*Token, error) {
