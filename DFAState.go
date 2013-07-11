@@ -1,12 +1,7 @@
 package gold
 
-type simpleDfaEdge struct {
-	CharSet simpleCharSet
-	Target  *dfaState
-}
-
 type dfaEdge struct {
-	CharSet *charSet
+	CharSet charSet
 	Target  *dfaState
 }
 
@@ -15,21 +10,6 @@ type dfaTransition func(r rune) (*dfaState, bool)
 type dfaState struct {
 	AcceptSymbol     *symbol
 	TransitionVector dfaTransition
-}
-
-func newSimpleTransitionVector(edges []simpleDfaEdge) dfaTransition {
-	vector := make(map[rune]*dfaState)
-
-	for _, edge := range edges {
-		for _, r := range edge.CharSet {
-			vector[r] = edge.Target
-		}
-	}
-
-	return func(r rune) (*dfaState, bool) {
-		state, ok := vector[r]
-		return state, ok
-	}
 }
 
 func newTransitionVector(edges []dfaEdge) dfaTransition {

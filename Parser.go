@@ -17,13 +17,6 @@ type Parser interface {
 	GetInformation() GrammarInformation
 }
 
-type GrammarInformation struct {
-	Name    string
-	Version string
-	Author  string
-	About   string
-}
-
 type parser struct {
 	grammar      grammar
 	isCgtGrammar bool
